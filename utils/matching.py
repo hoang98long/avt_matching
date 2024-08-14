@@ -1,10 +1,8 @@
 import ftplib
-from utils.config import *
 from utils.matching_image import Matching_Image
 import psycopg2
-import json
-from datetime import datetime
-import os
+from psycopg2.extras import DictCursor
+from datetime import datetime, timedelta
 import ast
 import threading
 import time
@@ -74,39 +72,52 @@ class Matching:
     def __init__(self):
         pass
 
-    def match(self, conn, id, task_param, config_data):
-        input_files = []
-        for ship_object in task_param:
-            input_files.append(ship_object['path'])
+    def match(self, conn, id, task_param):
+        time_detected = datetime.now()
         try:
-            # filename = src_img_path.split("/")[-1]
-            # local_file_path = LOCAL_SRC_CLASSIFY_IMAGE_PATH + filename
-            # ftp = connect_ftp(config_data)
-            # download_file(ftp, src_img_path, local_file_path)
-            ftp = connect_ftp(config_data)
-            input_files_local = []
             task_output = {
 
             }
-            for input_file in input_files:
-                filename = input_file.split("/")[-1]
-                local_file_path = os.path.join(LOCAL_SRC_MATCHING_IMAGE_PATH, filename)
-                input_files_local.append(local_file_path)
-                if not os.path.isfile(local_file_path):
-                    download_file(ftp, input_file, local_file_path)
             matching_image = Matching_Image()
-            for input_file, input_file_local in zip(input_files, input_files_local):
-                result = matching_image.matching(input_file_local, model, scaler)
-                task_output[input_file] = result
-            task_output = str(task_output).replace("'", "\"")
-            # result = classification_image.classify(local_file_path, model, scaler)
-            # task_output = str({
-            #     "output_class": result
-            # })
+            for ship_object in task_param:
+                (latitude_detected, longitude_detected, width_detected,
+                 height_detected, cog_detected) = ship_object['coords'][0:6]
+                cursor = conn.cursor(cursor_factory=DictCursor)
+                cursor.execute('SET search_path TO public')
+                cursor.execute("SELECT current_schema()")
+                query = """
+                    SELECT *
+                    FROM AIS_DATA
+                    WHERE timestamp BETWEEN %s AND %s;
+                """
+                cursor.execute(query, (time_detected - timedelta(seconds=10), time_detected + timedelta(seconds=10)))
+                records = cursor.fetchall()
+                list_possible_ship = []
+                for record in records:
+                    ship_id = record['MMSI']
+                    longitude_ais = record['lng']
+                    latitude_ais = record['lat']
+                    width_ais = record['width']
+                    height_ais = record['height']
+                    cog_ais = record['cog']
+                    if not matching_image.position_check(latitude_detected, longitude_detected, longitude_ais,
+                                                         latitude_ais, time_detected):
+                        continue
+                    list_possible_ship.append([ship_id, matching_image.likelihood(cog_detected, cog_ais, width_detected,
+                                                                                  width_ais, height_detected,
+                                                                                  height_ais, latitude_detected,
+                                                                                  longitude_detected, latitude_ais,
+                                                                                  longitude_ais, time_detected)])
+                if len(list_possible_ship) == 0:
+                    print("no ship match")
+                    continue
+                max_likelihood_ship = max(list_possible_ship, key=lambda x: x[1])
+                print("id ship matching: ", max_likelihood_ship[0])
             print("Connection closed")
             cursor = conn.cursor()
             route_to_db(cursor)
-            cursor.execute("UPDATE avt_task SET task_stat = 1, task_output = %s, updated_at = %s WHERE id = %s", (task_output, get_time(), id,))
+            cursor.execute("UPDATE avt_task SET task_stat = 1, task_output = %s, updated_at = %s WHERE id = %s",
+                           (task_output, get_time(), id,))
             conn.commit()
             return True
         except ftplib.all_errors as e:
@@ -117,7 +128,7 @@ class Matching:
             print(f"FTP error: {e}")
             return False
 
-    def process(self, id, config_data, model, scaler):
+    def process(self, id, config_data):
         conn = psycopg2.connect(
             dbname=config_data['database']['database'],
             user=config_data['database']['user'],
@@ -127,7 +138,7 @@ class Matching:
         )
         task_stat_value_holder = {'value': 2}
         stop_event = threading.Event()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=DictCursor)
         cursor.execute('SET search_path TO public')
         cursor.execute("SELECT current_schema()")
         cursor.execute("SELECT task_param FROM avt_task WHERE id = %s", (id,))
@@ -141,7 +152,7 @@ class Matching:
         checker_thread.start()
         try:
 
-            return_flag = self.match(conn, id, task_param, config_data)
+            return_flag = self.match(conn, id, task_param)
             cursor.close()
             if return_flag:
                 task_stat_value_holder['value'] = 1

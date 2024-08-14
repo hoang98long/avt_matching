@@ -2,8 +2,9 @@ import math
 
 sigma_cog = 3
 sigma_width = 5
+sigma_height = 5
 sigma_position = 10
-total_likelihood_threshold = 100
+likelihood_position_threshold = 100
 
 
 def likelihood_cog(cog_detected, cog_ais, time_sec):
@@ -16,8 +17,13 @@ def likelihood_width(width_detected, width_ais):
     return math.exp(-0.5 * ((width_detected - width_ais) / sigma_width) ** 2)
 
 
-def likelihood_position(position_detected, position_ais, time_sec):
-    distance = position_detected - position_ais
+def likelihood_height(height_detected, height_ais):
+    return math.exp(-0.5 * ((height_detected - height_ais) / sigma_height) ** 2)
+
+
+def likelihood_position(position_detected_lat, position_detected_lon, position_ais_lat, position_ais_lon, time_sec):
+    distance = math.sqrt(
+        (position_ais_lat - position_detected_lat) ** 2 + (position_ais_lon - position_detected_lon) ** 2)
     return math.exp(-0.5 * (distance / (sigma_position + time_sec * 10)) ** 2)
 
 
@@ -32,12 +38,21 @@ class Matching_Image:
     def __init__(self):
         pass
 
-    def matching(self, cog_detected, cog_ais, width_detected, width_ais, position_detected, position_ais, time_sec):
-        likelihood_cog_value = likelihood_cog(cog_detected, cog_ais, time_sec)
-        likelihood_width_value = likelihood_width(width_detected, width_ais)
-        likelihood_position_value = likelihood_position(position_detected, position_ais, time_sec)
-        total_likelihood_value = total_likelihood(likelihood_cog_value, likelihood_width_value, likelihood_position_value)
-        if total_likelihood_value > total_likelihood_threshold:
+    def position_check(self, position_detected_lat, position_detected_lon, position_ais_lat, position_ais_lon,
+                       time_sec):
+        if likelihood_position(position_detected_lat, position_detected_lon, position_ais_lat, position_ais_lon,
+                               time_sec) > likelihood_position_threshold:
             return True
         else:
             return False
+
+    def likelihood(self, cog_detected, cog_ais, width_detected, width_ais, height_detected, height_ais,
+                 position_detected_lat, position_detected_lon, position_ais_lat, position_ais_lon, time_sec):
+        likelihood_cog_value = likelihood_cog(cog_detected, cog_ais, time_sec)
+        likelihood_width_value = likelihood_width(width_detected, width_ais)
+        likelihood_height_value = likelihood_height(height_detected, height_ais)
+        likelihood_position_value = likelihood_position(position_detected_lat, position_detected_lon,
+                                                        position_ais_lat, position_ais_lon, time_sec)
+        total_likelihood_value = total_likelihood(likelihood_cog_value, likelihood_width_value,
+                                                  likelihood_position_value, likelihood_height_value)
+        return total_likelihood_value
