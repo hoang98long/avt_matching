@@ -10,7 +10,5 @@ RUN conda init bash
 
 COPY /home/avt/github/avt_matching/requirements.txt .
 RUN conda run -n avt_matching pip install -r requirements.txt
-RUN conda install -n avt_matching -c conda-forge gdal
-RUN conda install -n avt_matching -c conda-forge rasterio
 
 CMD ["bash", "-c", "source activate avt_matching && cd /app/avt_matching && python main.py"]
