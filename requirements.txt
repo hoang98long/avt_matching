@@ -1,2 +1,2 @@
-joblib==1.4.2
-psycopg2_binary==2.9.9
+joblib
+psycopg2_binary
