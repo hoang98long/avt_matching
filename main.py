@@ -1,14 +1,9 @@
 import argparse
 import time
-
-from utils.matching import Classification
-from utils.config import *
+from utils.matching import Matching
 import joblib
 import json
 import psycopg2
-
-model = joblib.load(SHIP_CLASSIFICATION_MODEL_PATH)
-scaler = joblib.load(SHIP_CLASSIFICATION_SCALER_PATH)
 
 
 def get_task_id_list(task_type):
@@ -39,6 +34,6 @@ if __name__ == "__main__":
         list_task = get_task_id_list(task_type)
         if len(list_task) > 0:
             for task_id in list_task:
-                classification = Classification()
-                classification.process(task_id, config_data, model, scaler)
+                matching = Matching()
+                matching.process(task_id, config_data)
         time.sleep(5)
