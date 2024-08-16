@@ -1,0 +1,8 @@
+version: '1'
+services:
+  avt_matching:
+    build: .
+    volumes:
+      - ../config.json:/app/config.json
+      - .:/app/avt_matching
+    command: bash -c "source activate avt_matching && cd /app/avt_matching && python main.py --config_file /app/config.json"

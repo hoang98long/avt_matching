@@ -13,4 +13,4 @@ RUN conda init bash
 COPY requirements.txt .
 RUN conda run -n avt_matching pip install -r requirements.txt
 
-CMD ["bash", "-c", "source activate avt_matching && cd /app/avt_matching && python main.py"]
+CMD ["bash", "-c", "source activate avt_matching && cd /app/avt_matching && python main.py --config_file /app/config.json"]
