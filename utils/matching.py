@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import ast
 import threading
 import time
+import json
 
 
 def connect_ftp(config_data):
@@ -74,12 +75,10 @@ class Matching:
 
     def match(self, conn, id, task_param):
         time_detected = datetime.now()
+        detections = json.loads(task_param[1:-1])['detections']
         try:
-            task_output = {
-
-            }
             matching_image = Matching_Image()
-            for ship_object in task_param:
+            for ship_object in detections:
                 (latitude_detected, longitude_detected, width_detected,
                  height_detected, cog_detected) = ship_object['coords'][0:6]
                 cursor = conn.cursor(cursor_factory=DictCursor)
@@ -87,14 +86,14 @@ class Matching:
                 cursor.execute("SELECT current_schema()")
                 query = """
                     SELECT *
-                    FROM AIS_DATA
-                    WHERE timestamp BETWEEN %s AND %s;
+                    FROM avt_adsb_data
+                    WHERE import_at BETWEEN %s AND %s;
                 """
                 cursor.execute(query, (time_detected - timedelta(seconds=10), time_detected + timedelta(seconds=10)))
                 records = cursor.fetchall()
                 list_possible_ship = []
                 for record in records:
-                    ship_id = record['MMSI']
+                    ship_id = record['id']
                     longitude_ais = record['lng']
                     latitude_ais = record['lat']
                     width_ais = record['width']
@@ -114,17 +113,8 @@ class Matching:
                 max_likelihood_ship = max(list_possible_ship, key=lambda x: x[1])
                 print("id ship matching: ", max_likelihood_ship[0])
             print("Connection closed")
-            cursor = conn.cursor()
-            route_to_db(cursor)
-            cursor.execute("UPDATE avt_task SET task_stat = 1, task_output = %s, updated_at = %s WHERE id = %s",
-                           (task_output, get_time(), id,))
-            conn.commit()
             return True
         except ftplib.all_errors as e:
-            cursor = conn.cursor()
-            route_to_db(cursor)
-            cursor.execute("UPDATE avt_task SET task_stat = 0 WHERE id = %s", (id,))
-            conn.commit()
             print(f"FTP error: {e}")
             return False
 
